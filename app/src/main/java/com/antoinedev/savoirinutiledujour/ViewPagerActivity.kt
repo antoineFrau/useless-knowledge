@@ -25,6 +25,8 @@ import kotlinx.android.synthetic.main.activity_view_pager.*
 import kotlinx.android.synthetic.main.fragment_view_pager.*
 import kotlinx.android.synthetic.main.fragment_view_pager.view.*
 import android.support.design.widget.TabLayout
+import com.antoinedev.savoirinutiledujour.UtilsThings.isHashcodeEquals
+import java.util.*
 
 
 
@@ -32,7 +34,9 @@ class ViewPagerActivity : AppCompatActivity(), DataListener, InternetConnectivit
 
     private var mSectionsPagerAdapter: SectionsPagerAdapter? = null
     private var mSnackBar: Snackbar? = null
-    private lateinit var knowledgeItemList: ArrayList<KnowledgeItem>
+    private var knowledgeItemList: ArrayList<KnowledgeItem>? = null
+    private var timeClickRefresh: Date? = null
+    private var timeClickRefreshReactivate: Date? = null
 
     private lateinit var mInternetAvailabilityChecker: InternetAvailabilityChecker
 
@@ -44,6 +48,7 @@ class ViewPagerActivity : AppCompatActivity(), DataListener, InternetConnectivit
 
         MainController.getInstance(applicationContext).getData(this, isNetworkAvailable())
 
+        // Listen Internet status event
         InternetAvailabilityChecker.init(this)
         mInternetAvailabilityChecker = InternetAvailabilityChecker.getInstance()
         mInternetAvailabilityChecker.addInternetConnectivityListener(this)
@@ -59,26 +64,37 @@ class ViewPagerActivity : AppCompatActivity(), DataListener, InternetConnectivit
 
     override fun onInternetConnectivityChanged(isConnected: Boolean) {
         if (isConnected) {
-            showSnackBar("Vous êtes maintenant en ligne vous pouvez rafrechir !")
+            if(mSectionsPagerAdapter != null && this.knowledgeItemList == null)
+                showSnackBar("Vous êtes maintenant en ligne vous pouvez rafrechir !")
+            else
+                showSnackBar("Vous êtes maintenant en ligne !")
             // Think about add -> MainController.getInstance(applicationContext).getData(this, isNetworkAvailable()) -> Here
-        }
-        else showSnackBar("Mode hors ligne activié..", 4000)
+        } else showSnackBar("Mode hors ligne activié..", 4000)
     }
 
     override fun notifyRetrieved(knowledgeItems: ArrayList<KnowledgeItem>) {
+        knowledgeItems.sortBy { item -> item.id }
+
+        if (this.knowledgeItemList != null && this.knowledgeItemList!!.isHashcodeEquals(knowledgeItems)) {
+            showSnackBar("Pas de nouvelle données.",2000)
+            return
+        }
+
         this.knowledgeItemList = knowledgeItems
-        this.knowledgeItemList.sortBy { item -> item.id }
 
         // Create the adapter that will return a fragment for each of the three
         // primary sections of the activity.
-        mSectionsPagerAdapter = SectionsPagerAdapter(supportFragmentManager, this.knowledgeItemList)
+        mSectionsPagerAdapter = SectionsPagerAdapter(supportFragmentManager, this.knowledgeItemList!!)
+
         // Set up the ViewPager with the sections adapter.
         container.adapter = mSectionsPagerAdapter
         tabDots.setupWithViewPager(container)
     }
 
     override fun notifyNotRetrieved() {
-         showSnackBar("Vous êtes en mode hors ligne, et aucune donnée a été sauvegardé")
+        if (isNetworkAvailable()) {
+            showSnackBar("Aucune donnée trouvée ! Essayez à nouveau !", 2000)
+        } else showSnackBar("Mode hors ligne activié..", 4000)
     }
 
     fun showSnackBar(content: String, duration: Int = Snackbar.LENGTH_INDEFINITE) {
@@ -91,6 +107,8 @@ class ViewPagerActivity : AppCompatActivity(), DataListener, InternetConnectivit
     fun hideSnackBar() {
         mSnackBar?.dismiss()
     }
+
+
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         // Inflate the menu; this adds items to the action bar if it is present.
@@ -109,6 +127,19 @@ class ViewPagerActivity : AppCompatActivity(), DataListener, InternetConnectivit
                 showSnackBar("Veuillez vous connecter à internet pour apprendre plus de savoir !",4000)
                 return true
             }
+            // We are blocking user to refresh he already refresh 3seconds ago.
+            timeClickRefresh = Date()
+            if(timeClickRefresh != null && timeClickRefreshReactivate != null
+                    && timeClickRefresh?.time!! <= timeClickRefreshReactivate?.time!!) {
+                Log.d("ViewPagerTest", "HERE_REFRESH")
+                return true
+            }
+            val cal = Calendar.getInstance()
+            cal.time = timeClickRefresh
+            cal.add(Calendar.SECOND, 3)
+
+            timeClickRefreshReactivate = cal.time
+
             MainController.getInstance(applicationContext).getData(this, isNetworkAvailable())
             hideSnackBar()
             return true
