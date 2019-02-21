@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">SavoirInutileDuJour</string>
+    <string name="section_format">#%1$d</string>
+    <string name="title_app">Paye ton savoir</string>
+</resources>
