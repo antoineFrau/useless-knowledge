@@ -18,6 +18,7 @@ import java.net.URL
 import kotlin.collections.ArrayList
 import android.os.Looper
 import android.os.Message
+import org.json.JSONException
 
 @SuppressLint("Registered")
 class MainController private constructor(context: Context) {
@@ -43,7 +44,7 @@ class MainController private constructor(context: Context) {
 //        val url = "https://serginho.goodbarber.com/front/get_items/939101/26903013/?local=1" //1 item
         val resultList: ArrayList<KnowledgeItem> = ArrayList()
         val m = this.responseHandler.obtainMessage()
-        try{
+        try {
             val urlObject = URL(url)
             val conn = urlObject.openConnection() as HttpURLConnection
             conn.readTimeout = 7000
@@ -61,11 +62,15 @@ class MainController private constructor(context: Context) {
                 Log.d(TAG, jsonAsString)
                 if (!jsonAsString.isNullOrEmpty()) m.obj = transformJsonToKnowledgeItem(jsonAsString)
             }
+        } catch (e: JSONException){
+            Log.e(TAG, e.message)
+            m.obj = ArrayList<KnowledgeItem>()
         } catch(e: IOException) {
             Log.e(TAG, e.message)
             m.obj = ArrayList<KnowledgeItem>()
+        } finally {
+            this.responseHandler.sendMessage(m)
         }
-        this.responseHandler.sendMessage(m)
         return resultList
     }
 
@@ -75,7 +80,11 @@ class MainController private constructor(context: Context) {
         if (itemsCached.isNullOrEmpty()) {
             m.obj = ArrayList<KnowledgeItem>()
         } else {
-            m.obj = transformJsonToKnowledgeItem(itemsCached!!)
+            try {
+                m.obj = transformJsonToKnowledgeItem(itemsCached!!)
+            } catch (e: JSONException){
+                m.obj = ArrayList<KnowledgeItem>()
+            }
         }
         this.responseHandler.sendMessage(m)
     }
@@ -118,6 +127,8 @@ class MainController private constructor(context: Context) {
 
         val jsonObj = JSONObject(strJSON)
         val jsonArray = jsonObj.getJSONArray("items")
+        if(jsonArray.length()==0)
+            throw JSONException("No items found in the JSON")
         var title: String
         var description: String
         var date: String
@@ -136,13 +147,3 @@ class MainController private constructor(context: Context) {
     }
 
 }
-//        StringRequest(Request.Method.GET, url,
-//            Response.Listener { response ->
-//                val strResp = response.toString()
-//                // this.dataCache.saveText(strResp, "item_cached")
-//                Log.d("myController", strResp)
-//                dataListener.notifyRetrieved(transformJsonToKnowledgeItem(strResp))
-//            }, Response.ErrorListener { e ->
-//                dataListener.notifyNotRetrieved()
-//                Log.d("myController", "FAILED")
-//            })
